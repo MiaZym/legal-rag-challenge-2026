@@ -1,0 +1,38 @@
+# Base
+requests>=2.28.0
+python-dotenv>=1.0.0
+
+# LlamaIndex core
+llama-index-core
+
+# LLM: OpenRouter (Llama-3.3-70B)
+llama-index-llms-openrouter
+
+# Embeddings: local HuggingFace BAAI/bge-large-en-v1.5
+llama-index-embeddings-huggingface
+sentence-transformers
+# PyTorch — install the build that matches your hardware
+# https://pytorch.org/get-started/locally/
+torch
+
+# Reranking: Cohere rerank-english-v3.0
+llama-index-postprocessor-cohere-rerank
+
+# Hybrid retrieval (BM25 over the same docstore)
+llama-index-retrievers-bm25
+
+# Vector store: FAISS
+llama-index-vector-stores-faiss
+faiss-cpu
+
+# PDF extraction
+PyMuPDF
+
+# Retry / rate-limit
+tenacity
+
+# Progress bars (ETL)
+tqdm
+
+# Date parsing (ISO-8601 coercion for date answers)
+python-dateutil>=2.8.0
