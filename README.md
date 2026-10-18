@@ -24,8 +24,6 @@ log of the trade-offs between hosted and local model stacks.
 | 🔁 | Cost-aware engineering: embedding cache keyed by corpus fingerprint, resume-safe long runs, TPD-aware LLM fallback chain |
 | 📦 | ~3.4k lines of Python, each solution fully runnable end-to-end, no secrets and no competition data committed |
 
----
-
 ## Results
 
 Both submissions were graded on the official platform leaderboard under the
@@ -43,8 +41,6 @@ same scoring formula; numbers are taken directly from it
 corpus and 9× more questions, where single retrieval misses become binary —
 the drop is analysed openly in [`docs/RESULTS.md`](docs/RESULTS.md), together
 with the known sub-optimal spots of the submitted state.
-
----
 
 ## Architecture
 
@@ -90,8 +86,6 @@ In one pass the system:
 The submission schema and the evaluation-platform contract are documented in
 [`docs/platform/`](docs/platform).
 
----
-
 ## Stack comparison
 
 | Component       | warmup                                          | final                                              |
@@ -108,8 +102,6 @@ The submission schema and the evaluation-platform contract are documented in
 The differences are **only** in `run.py` and `etl_pipeline.py`; the API
 client (`arlc/`), retry/rate-limit helpers (`api_utils.py`), and the
 submission/telemetry schema are shared.
-
----
 
 ## Repository layout
 
@@ -148,7 +140,6 @@ Each `solutions/<name>/` directory is **fully runnable on its own** — there is
 no shared code outside the directory. This keeps each submission exactly as it
 was packaged for the platform and lets you reproduce either one in isolation.
 
----
 
 ## Quick start
 
@@ -185,8 +176,6 @@ Per-solution details (required keys, hardware notes for local BGE embeddings):
 - [`solutions/warmup/README.md`](solutions/warmup/README.md)
 - [`solutions/final/README.md`](solutions/final/README.md)
 
----
-
 ## Why two versions
 
 The warm-up corpus (~30 documents, 100 questions) and the final corpus
@@ -205,13 +194,9 @@ question distribution:
 Keeping both versions side by side makes the trade-off legible: it is an
 honest engineering log, not a single tuned number.
 
----
-
 ## Author
 
 **Maria Zykova** — [github.com/MiaZym](https://github.com/MiaZym)
-
----
 
 ## Disclaimer
 
