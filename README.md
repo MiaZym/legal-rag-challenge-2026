@@ -1,52 +1,94 @@
-# Agentic RAG Legal Challenge 2026 — two submissions
+# Legal Agentic RAG — Hybrid Retrieval & Grounded LLM Answers
 
-Production-grade Retrieval-Augmented Generation pipeline for English-language
-legal documents (DIFC laws and court cases), built for the
-**Agentic RAG Legal Challenge 2026** at *Machines Can See 2026*.
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![LlamaIndex](https://img.shields.io/badge/framework-LlamaIndex-6E33FF?style=flat-square)
+![FAISS](https://img.shields.io/badge/vector--store-FAISS-28A197?style=flat-square)
+![Cohere Rerank](https://img.shields.io/badge/reranker-Cohere%20v3-39594D?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
+![Score](https://img.shields.io/badge/warm--up%20score-0.591-blue?style=flat-square)
 
-This repo is a portfolio snapshot of two real submissions to the platform:
+End-to-end **Retrieval-Augmented Generation pipeline for English-language legal
+corpora** (DIFC laws and court cases): clause-aware PDF chunking, hybrid
+FAISS + BM25 retrieval, Cohere reranking, and strictly-grounded JSON answers
+with per-question latency telemetry.
 
-- [`solutions/warmup/`](solutions/warmup) — best score on the **warm-up**
-  (public test) set: **Total Score 0.591**
-- [`solutions/final/`](solutions/final) — version actually submitted on
-  the **final** (private 900-question) set: **Total Score 0.327**
+Two real, platform-verified submissions to the **Agentic RAG Legal Challenge
+2026** at *Machines Can See 2026* — kept side by side as an honest engineering
+log of the trade-offs between hosted and local model stacks.
 
-Both solutions share the same ingestion strategy (clause-aware PDF chunking,
-FAISS + BM25 hybrid retrieval, LLM-grounded JSON answers with telemetry) but
-differ in the embedding / generation stack. Side-by-side results:
-
-| Submission             | Phase   | Det   | Asst  | Grounding | Time  | Faith. | **Total** |
-|------------------------|---------|-------|-------|-----------|-------|--------|-----------|
-| `solutions/warmup`  | warm-up | 0.886 | 0.613 | 0.728     | 0.994 | 1.016  | **0.591** |
-| `solutions/final`   | final   | 0.606 | 0.585 | 0.546     | 1.000 | 0.998  | **0.327** |
-
-Numbers are taken directly from the platform leaderboard
-(see [`docs/RESULTS.md`](docs/RESULTS.md) for the full table and analysis).
+| | Highlight |
+|---|---|
+| 🏆 | Best **warm-up score 0.591**, with **0.886 deterministic accuracy** on typed legal questions (boolean / number / date / name / free_text) |
+| 🔎 | Hybrid retrieval (semantic FAISS + lexical BM25) with Cohere Rerank v3 and citation-filtered grounding |
+| ⚡ | Streaming generation with **TTFT ≈ ceiling (Time 1.000)** and faithfulness **0.998–1.016** on both submissions |
+| 🔁 | Cost-aware engineering: embedding cache keyed by corpus fingerprint, resume-safe long runs, TPD-aware LLM fallback chain |
+| 📦 | ~3.4k lines of Python, each solution fully runnable end-to-end, no secrets and no competition data committed |
 
 ---
 
-## What the system does
+## Results
 
-Given an English-language legal document corpus (PDFs) and a list of typed
-questions (`boolean | number | date | name | names | free_text`), the system:
+Both submissions were graded on the official platform leaderboard under the
+same scoring formula; numbers are taken directly from it
+(full table and analysis in [`docs/RESULTS.md`](docs/RESULTS.md)):
+
+| Submission                 | Phase      | Det   | Asst  | Grounding | Time  | Faith. | **Total** |
+|----------------------------|------------|-------|-------|-----------|-------|--------|-----------|
+| [`solutions/warmup`](solutions/warmup) | warm-up (100 q) | 0.886 | 0.613 | 0.728 | 0.994 | 1.016  | **0.591** |
+| [`solutions/final`](solutions/final)   | final (900 q, private) | 0.606 | 0.585 | 0.546 | 1.000 | 0.998  | **0.327** |
+
+*Det* = deterministic accuracy, *Asst* = free-text quality (LLM-judge),
+*Grounding* = page-level retrieval grounding, *Time* = TTFT modifier,
+*Faith.* = no-hallucination check. The final phase runs over a 3× larger
+corpus and 9× more questions, where single retrieval misses become binary —
+the drop is analysed openly in [`docs/RESULTS.md`](docs/RESULTS.md), together
+with the known sub-optimal spots of the submitted state.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph ETL["ETL — etl_pipeline.py"]
+        A1["Platform ZIP<br/>(~30 / ~300 PDFs)"] --> A2["PyMuPDF parse<br/>header / footer stripping"]
+        A2 --> A3["Clause-aware chunking<br/>Article / Section / Schedule / Part / Chapter"]
+        A3 --> A4["Sentence re-split<br/>~800 chars, 150 overlap"]
+        A4 --> A5["Embeddings<br/>Cohere v3 (warmup) / BGE-large local (final)<br/>+ fingerprint-keyed cache"]
+        A5 --> A6[("FAISS IndexFlatIP<br/>persisted")]
+    end
+
+    subgraph QA["Answering — run.py"]
+        B1["Question<br/>boolean / number / date / name / names / free_text"] --> B2["Hybrid retrieval<br/>FAISS top-40…100 + BM25 top-20…50<br/>merged by node_id"]
+        B2 --> B3["Cohere Rerank v3<br/>top-5"]
+        B3 --> B4["Prompt with<br/>human-readable chunk IDs"]
+        B4 --> B5["LLM, streamed<br/>Groq model chain (warmup) /<br/>OpenRouter Llama-3.3-70B (final)"]
+        B5 --> B6["Strict JSON answer<br/>answer + used_chunks<br/>per-type coercion, ISO-8601 dates"]
+    end
+
+    A6 --> B2
+    B6 --> C1["Telemetry per answer<br/>ttft / tpot / tokens / cited pages"]
+    C1 --> C2["submission.json<br/>+ code_archive.zip → POST to platform"]
+```
+
+In one pass the system:
 
 1. **Ingests** PDFs with PyMuPDF, strips repeated headers/footers, segments
    text at *Article / Section / Schedule / Part / Chapter / numbered clause*
    boundaries (clause-aware chunking), and further splits long segments by
    sentences (~800 chars, 150 overlap).
 2. **Indexes** chunks into a FAISS `IndexFlatIP` store, with an embedding
-   cache keyed by a corpus fingerprint so a re-run never re-embeds the same
-   PDFs.
+   cache keyed by a SHA-256 corpus fingerprint — a re-run never re-embeds an
+   unchanged corpus.
 3. **Answers** each question with a hybrid retriever (semantic FAISS + lexical
-   BM25), reranks the candidates with Cohere Rerank v3, builds a tight
-   prompt with chunk IDs, streams the answer from an LLM, and parses a strict
-   JSON response (`answer` + `used_chunks`).
+   BM25), reranks candidates with Cohere Rerank v3, streams the answer from an
+   LLM, and parses a strict JSON response (`answer` + `used_chunks`).
 4. **Reports telemetry** for every answer: `ttft_ms`, `tpot_ms`,
-   `total_time_ms`, token usage, and the grounding pages (`retrieved_chunk_pages`)
-   filtered down to the chunks the model actually cited.
+   `total_time_ms`, token usage, and grounding pages filtered down to the
+   chunks the model actually cited.
 
-The shape of `submission.json` and the contract with the evaluation platform
-are documented under [`docs/platform/`](docs/platform).
+The submission schema and the evaluation-platform contract are documented in
+[`docs/platform/`](docs/platform).
 
 ---
 
@@ -64,7 +106,7 @@ are documented under [`docs/platform/`](docs/platform).
 | Chunk metadata header in embedding | yes (title + case numbers)         | no                                                    |
 
 The differences are **only** in `run.py` and `etl_pipeline.py`; the API
-client (`arlc/`), API-level retry/rate-limit helpers (`api_utils.py`), and the
+client (`arlc/`), retry/rate-limit helpers (`api_utils.py`), and the
 submission/telemetry schema are shared.
 
 ---
@@ -74,9 +116,8 @@ submission/telemetry schema are shared.
 ```
 legal-rag-challenge-2026/
 ├── README.md                  # this file
-├── LICENSE
+├── LICENSE                    # MIT
 ├── .env.example               # template — no secrets
-├── .gitignore
 ├── docs/
 │   ├── COMPETITION.md         # participant guide (organizer-provided)
 │   ├── RESULTS.md             # full leaderboard table + analysis
@@ -85,7 +126,7 @@ legal-rag-challenge-2026/
 │       ├── EVALUATION.md
 │       └── openapi.yaml
 └── solutions/
-    ├── warmup/             # self-contained submission #1
+    ├── warmup/                # self-contained submission #1 (v7_warmup)
     │   ├── README.md
     │   ├── ARCHITECTURE.md
     │   ├── requirements.txt
@@ -93,7 +134,7 @@ legal-rag-challenge-2026/
     │   ├── etl_pipeline.py
     │   ├── api_utils.py
     │   └── arlc/
-    └── final/              # self-contained submission #2
+    └── final/                 # self-contained submission #2 (v2_final)
         ├── README.md
         ├── ARCHITECTURE.md
         ├── requirements.txt
@@ -131,7 +172,7 @@ cp ../../.env.example .env   # then fill in the keys you actually use
 python run.py
 ```
 
-The `run.py` script will:
+`run.py` will:
 
 1. download questions and the document ZIP from the platform,
 2. build (or load a cached) FAISS index,
@@ -139,8 +180,7 @@ The `run.py` script will:
 4. write `submission.json`, build `code_archive.zip`, and POST both to the
    platform.
 
-For the differences between the two solutions and which keys each one needs,
-see the per-solution READMEs:
+Per-solution details (required keys, hardware notes for local BGE embeddings):
 
 - [`solutions/warmup/README.md`](solutions/warmup/README.md)
 - [`solutions/final/README.md`](solutions/final/README.md)
@@ -155,23 +195,30 @@ but the *relative* importance of the components changes with corpus size and
 question distribution:
 
 - **warmup** leans on hosted Cohere embeddings + a Groq model chain. On the
-  small warm-up set this combination produced the highest deterministic
-  accuracy (0.886) and the best grounding (0.728).
+  small warm-up set this produced the highest deterministic accuracy (0.886)
+  and the best grounding (0.728).
 - **final** switches to local BGE embeddings and a single strong LLM via
-  OpenRouter. Latency and faithfulness become near-perfect (1.000 / 0.998),
-  but deterministic accuracy and grounding regress on the full 900-question
-  set. The full breakdown is in [`docs/RESULTS.md`](docs/RESULTS.md).
+  OpenRouter. Latency and faithfulness reach near-perfect scores
+  (1.000 / 0.998), but deterministic accuracy and grounding regress on the
+  full 900-question set.
 
-Keeping both versions side-by-side makes the trade-off legible: it is an
+Keeping both versions side by side makes the trade-off legible: it is an
 honest engineering log, not a single tuned number.
+
+---
+
+## Author
+
+**Maria Zykova** — [github.com/MiaZym](https://github.com/MiaZym)
 
 ---
 
 ## Disclaimer
 
 - This is a personal portfolio project. The evaluation platform, document
-  corpus, and challenge spec belong to *Machines Can See 2026 / Agentic RAG
-  Legal Challenge* organizers.
+  corpus, and challenge spec belong to the *Machines Can See 2026 /
+  Agentic RAG Legal Challenge* organizers; `docs/COMPETITION.md` and
+  `docs/platform/` are organizer-provided materials.
 - No competition data (PDFs, questions, submissions, embedding caches, logs)
   is included in this repository — see `.gitignore`.
 - API keys are **not** committed. Use `.env.example` as a template and supply

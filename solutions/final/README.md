@@ -6,7 +6,7 @@ Agentic RAG Legal Challenge 2026 (~300 documents, 900 private questions).
 **Submitted score:** Total **0.327**
 (Det 0.606 / Asst 0.585 / Grounding 0.546 / Time 1.000 / Faith. 0.998).
 
-Compared to [`v7_warmup`](../v7_warmup/README.md), this version trades hosted
+Compared to [`v7_warmup`](../warmup/README.md), this version trades hosted
 APIs for **local embeddings** and a **single strong LLM**, widens the retrieval
 funnel, and gains a resume mechanism for long runs.
 
@@ -48,12 +48,12 @@ COHERE_API_KEY=...
 ```
 
 (Cohere is needed only for the reranker.) The `.env` file must live inside
-this folder (`solutions/v2_final/.env`).
+this folder (`solutions/final/.env`).
 
 ## Run
 
 ```bash
-cd solutions/v2_final
+cd solutions/final
 
 python -m venv .venv
 # Windows: .venv\Scripts\Activate.ps1

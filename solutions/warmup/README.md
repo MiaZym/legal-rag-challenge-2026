@@ -49,13 +49,13 @@ GROQ_API_KEY=...
 COHERE_API_KEY=...
 ```
 
-The `.env` file must live **inside this folder** (`solutions/v7_warmup/.env`).
+The `.env` file must live **inside this folder** (`solutions/warmup/.env`).
 Copy `../../.env.example` and remove the keys you don't need.
 
 ## Run
 
 ```bash
-cd solutions/v7_warmup
+cd solutions/warmup
 
 python -m venv .venv
 # Windows: .venv\Scripts\Activate.ps1
